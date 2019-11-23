@@ -1,0 +1,7 @@
+.Rhistory
+.RData
+.Rproj.user
+
+# PII data
+data/raw
+data/PII_*
