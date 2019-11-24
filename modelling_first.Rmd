@@ -83,18 +83,38 @@ transfer_data <- transfer_data_raw %>%
 
 ## Course Description
 
-The data collected for this investigation were collected across two quarters (F18, W19) at the University of California, Los Angeles. Demographic information about the participants is reported in the table below.
+The data collected for this investigation were collected across two quarters (F18, W19) at the University of California, Los Angeles. Demographic information about the participants is reported in the tables below.
 
-```{r demographics}
+### Combined Demographics
+
+```{r demographics_all}
 transfer_data %>% 
   mutate(sex = fct_explicit_na(sex)) %>% 
-  count(sex) %>% 
-  kable(format = "markdown")
+  count(sex)
 transfer_data %>% 
   mutate(race_ethnic = fct_explicit_na(race_ethnic) %>% fct_lump(5)) %>% 
-  count(race_ethnic) %>% 
-  kable(format = "markdown")
+  count(race_ethnic)
 ```
+
+### Counts by Term
+
+```{r counts_by_term}
+# Completed the course
+transfer_data %>% 
+  count(term) %>% 
+  add_row(term = "Total", n = sum(.$n))
+
+# Completed the target items
+transfer_data %>% 
+  select(term, Q1_response, Q2, Q3, Q4, Q5_response, Q6, Q7_response) %>% 
+  na.omit() %>% 
+  count(term) %>% 
+  add_row(term = "Total", n = sum(.$n))
+```
+
+
+
+### Comparing Class Performance on Assessments
 
 Each quarter lasted ten weeks during which students completed the full course. Students were scored on their homework completion, and completed five quizzes and a final exam. The relevant questions on transfer were given as an optional extra credit section at the end of the final exam, but for comparison, the mean scores on all of the classwork are given here (values in parentheses indicate the margin of error).
 
@@ -120,9 +140,7 @@ tibble(
   Assignment = c("Final Exam", "Homework", paste("Quiz", 1:5)),
   F18 = sprintf("%.2f (%.2f)", assignment_means$F18, assignment_moes$F18),
   W19 = sprintf("%.2f (%.2f)", assignment_means$W19, assignment_moes$W19)
-) %>% 
-  kable(format = "markdown")
-
+)
 ```
 
 
@@ -138,40 +156,25 @@ The following seven questions were asked following the final exam in both classe
 Before being presented with any of the transfer questions, students were presented with the `lm()` and `supernova()` output for the two models below.
 
 ```{r model_chocolate}
-model_chocolate <- lm(winpercent ~ chocolate, data = candy_rankings)
+(model_chocolate <- lm(winpercent ~ chocolate, data = candy_rankings))
+supernova(model_chocolate)
 ```
 
-```{r, echo = FALSE, out.width = '100%'}
-knitr::include_graphics("figures/output_fit_chocolate.png")
-knitr::include_graphics("figures/output_anova_chocolate.png")
-```
+
 
 ```{r model_sugar}
-model_sugar <- lm(winpercent ~ sugarpercent, data = candy_rankings)
-```
-
-```{r, echo = FALSE, out.width = '100%'}
-knitr::include_graphics("figures/output_fit_sugar.png")
-knitr::include_graphics("figures/output_anova_sugar.png")
+(model_sugar <- lm(winpercent ~ sugarpercent, data = candy_rankings))
+supernova(model_sugar)
 ```
 
 ```{r model_chocolate_sugar}
-model_chocolate_sugar <- lm(winpercent ~ chocolate + sugarpercent, data = candy_rankings)
-```
-
-```{r, echo = FALSE, out.width = '100%'}
-knitr::include_graphics("figures/output_fit_chocolate_sugar.png")
-knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
+(model_chocolate_sugar <- lm(winpercent ~ chocolate + sugarpercent, data = candy_rankings))
+supernova(model_chocolate_sugar)
 ```
 
 ```{r model_sugar_chocolate}
-model_sugar_chocolate <- lm(winpercent ~ sugarpercent + chocolate, data = candy_rankings)
-```
-
-
-```{r, echo = FALSE, out.width = '100%'}
-knitr::include_graphics("figures/output_fit_sugar_chocolate.png")
-knitr::include_graphics("figures/output_anova_sugar_chocolate.png")
+(model_sugar_chocolate <- lm(winpercent ~ sugarpercent + chocolate, data = candy_rankings))
+supernova(model_sugar_chocolate)
 ```
 
 
@@ -190,8 +193,7 @@ transfer_data %>%
   map_df(mean, na.rm = TRUE) %>% 
   select(correct, everything()) %>%
   transpose_tbl() %>% 
-  set_names(c("concept", "proportion")) %>% 
-  kable(format = "markdown")
+  set_names(c("concept", "proportion"))
 ```
 
 ### Q2-4: Reasoning about PRE, SST, and SSE in the New model
@@ -242,8 +244,7 @@ transfer_data %>%
   # tally / compute proportions
   map_df(mean, na.rm = TRUE) %>% 
   transpose_tbl() %>%
-  set_names(c("concept", "proportion")) %>% 
-  kable(format = "markdown")
+  set_names(c("concept", "proportion"))
 ```
 
 
@@ -279,6 +280,5 @@ transfer_data %>%
   # tally / compute proportions
   map_df(mean, na.rm = TRUE) %>% 
   transpose_tbl() %>%
-  set_names(c("concept", "proportion")) %>% 
-  kable(format = "markdown")
+  set_names(c("concept", "proportion"))
 ```
