@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(kableExtra)
 library(tidyverse)
+library(ggcorrplot)
 library(supernova)
 library(fivethirtyeight)
 
@@ -55,6 +56,9 @@ score_sheets <- lst(
   Q5 = read_rds("data/score_sheet_Q5.Rds") %>% set_names(paste0("Q5_", names(.))),
   Q7 = read_rds("data/score_sheet_Q7.Rds") %>% set_names(paste0("Q7_", names(.)))
 )
+
+# Selected final exam items
+other_data <- read_rds("data/other_data.Rds")
 
 # Score data --------------------------------------------------------------
 
@@ -197,24 +201,6 @@ transfer_data %>%
   set_names(c("concept", "prop."))
 ```
 
-### Q1: By Term
-
-```{r transfer_Q1_by_term}
-transfer_data %>% 
-  filter(!is.na(Q1_normalized), is.na(Q1_veto)) %>% 
-  # only look at the scoring columns
-  select(term, starts_with("Q1_"), -Q1_response, -Q1_normalized, -Q1_veto) %>%
-  # rename for convenience
-  set_names(str_remove(names(.), "^Q1_")) %>% 
-  # tally / compute proportions
-  group_by(term) %>% 
-  summarize_all(mean, na.rm = TRUE) %>% 
-  select(term, correct, everything()) %>%
-  transpose_tbl() %>% 
-  {.[2:nrow(.), ]} %>% 
-  set_names(c("concept", "F18", "W19"))
-```
-
 
 ### Q2-4: Reasoning about PRE, SST, and SSE in the New model
 
@@ -258,6 +244,154 @@ summaries$Q4 %>% count_to_prop()
 summaries$Q4 %>% select(n) %>% chisq.test()
 ```
 
+
+### Q5: Why is the SSE for the new model smaller? 
+
+After answering the previous questions, students moved on to a new page on which they were informed that, in fact, the SSE is lower for the two-predictor model than for either of the single-predictor models (they were prevented from navigating back to modify their answer to the prior question). Given this new information, students were asked on an open-response question why they thought the SSE for the two-predictor model would be smaller. These responses were again coded inductively by the authors, and the proportions of each coded concept are given in the table below.
+
+```{r transfer_Q5}
+transfer_data %>% 
+  filter(!is.na(Q5_response)) %>% 
+  # only look at the scoring columns
+  select(starts_with("Q5_"), -Q5_response, -Q5_notes) %>%
+  # rename for convenience
+  set_names(str_remove(names(.), "^Q5_")) %>% 
+  # tally / compute proportions
+  map_df(mean, na.rm = TRUE) %>% 
+  transpose_tbl() %>%
+  set_names(c("concept", "prop."))
+```
+
+
+### Q6: Making predictions with new model
+
+To test their understanding of model predictions, in Question 6, students were given the best fitting values of the new model and the corresponding ANOVA table (see output below) and were asked to predict the win percentage for a candy that contains chocolate (see Table 4 for the question and the answer choices). This was a difficult transfer question for a few reasons. First, the way the question is phrased does not explicitly mention sugar percentage, though it is included in the model and the prior four questions have been concerning a model with both chocolate and sugar percentage. Second, in the ANOVA table, sugar percentage is not a significant predictor (evidenced by the p value), which may lead students to discount it. Third, the correct answer was an expression (38.26 + 18.27 + 8.57*sugarpercent) rather than a single value. The model modifies the prediction according to sugar percentage, and since students were not given a specific value for sugar percentage, the correct answer needs to include sugar percentage as a variable. Students had no experience with predictions left as algebraic expressions in the course. And lastly, students were never shown the correct GLM equation for the best fitting two-predictor model. Students were primarily working from their own intuition about what that would be.
+
+```{r, echo = FALSE, out.width = '100%'}
+knitr::include_graphics("figures/output_fit_chocolate_sugar.png")
+knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
+```
+
+```{r}
+summaries$Q6 %>% count_to_prop()
+```
+
+#### Do similar items from the final predict performance on Q6?
+
+The following three questions were asked on the final and directly relate to understanding how to make a prediction using model coefficients.
+
+**1)** kBased on this chocolate model, what would the predicted value of winpercent be for candies that contain chocolate?
+
+```{r, echo = FALSE}
+lm(winpercent ~ chocolate, data = candy_rankings)
+```
+
+**2)** We fit another model (the “**fruity** model”) using the same approach we used with **chocolate**. The parameter estimates for the two models are in the table above. How should we interpret the negative estimate (-11.21) for the **fruity** parameter?
+
+```{r, echo = FALSE}
+lm(winpercent ~ fruity, data = candy_rankings)
+```
+
+**3)** Fitting the model of winpercent explained by sugarpercent yields the following parameter estimates: $b_0 = 44.61$; $b_1 = .1192$. If a candy has a sugarpercent of 90, what would you predict its winpercent
+to be?
+
+```{r}
+left_join(
+  transfer_data %>% 
+    mutate(Q6 = str_detect(Q6, "sugarpercent$") %>% as.integer()) %>% 
+    select(id, Q6),
+  
+  other_data %>% 
+    mutate(
+      Q19 = str_detect(Q19, "42\\.14 \\+ 18\\.78") %>% as.integer(),
+      Q21 = str_detect(Q21, "The negative number shows .+ having fruit .+ candy less likely to win") %>%
+        as.integer(),
+      Q40 = str_detect(Q40, "55") %>% as.integer()
+    ),
+  by = "id"
+) %>% 
+  select(-term, -id) %>% 
+  rename(other_1 = Q19, other_2 = Q21, other_3 = Q40) %>% 
+  cor(use = "complete.obs") %>% 
+  ggcorrplot(
+    title = "Cor. of the transfer item (Q6) and the exam items",
+    type = "lower", 
+    lab = TRUE, 
+    colors = c("white", "grey", "black")
+  )
+```
+
+
+### Q7: Why is the ANOVA table for the chocolate then sugar model different from the sugar then chocolate model?
+
+Finally, students were queried about the effect of sequentially adding variables into a complex model. Students were told that we ran two models where the order of the predictor variables was flipped. That is, in the first output below, they were shown the model where chocolate was entered first then sugar percent. In the next output, they were shown the model where sugar percent was entered before chocolate. Question 7 asked students to explain why the ANOVA tables showed different values depending on which variable was entered into the model first. These responses were again coded inductively by the authors, and the proportions of each coded concept are given in the table below the outputs.
+
+```{r, echo = FALSE, out.width = '100%'}
+knitr::include_graphics("figures/output_fit_chocolate_sugar.png")
+knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
+knitr::include_graphics("figures/output_fit_sugar_chocolate.png")
+knitr::include_graphics("figures/output_anova_sugar_chocolate.png")
+
+q7_data <- transfer_data %>% 
+  filter(!is.na(Q7_response)) %>% 
+  # only look at the scoring columns
+  select(starts_with("Q7_"), -Q7_response, -Q7_notes) %>%
+  # rename for convenience
+  set_names(str_remove(names(.), "^Q7_")) %>% 
+  # tally / compute proportions
+  mutate(none_of_these = rowSums(.) == 0)
+  
+q7_data %>% 
+  map_df(mean, na.rm = TRUE) %>% 
+  transpose_tbl() %>%
+  set_names(c("concept", "prop."))
+```
+
+#### How many students included at least one of the correct concepts?
+
+```{r}
+correct_concepts <- c(
+  "first variable has more",
+  "second variable has leftover (first is taken out)",
+  "SS Model / PRE has different opportunity / variation to explain",
+  "overlapping variation"
+)
+
+q7_mis_dna  <- q7_data %>% 
+  mutate(mis_dna = misunderstood | `did not attempt`) %>% 
+  {mean(.$mis_dna, na.rm = TRUE)}
+
+q7_data %>% 
+  select(one_of(correct_concepts)) %>% 
+  transmute(one_correct = rowSums(.) > 0) %>% 
+  summarize(one_correct = mean(one_correct, na.rm = TRUE)) %>% 
+  mutate(mis_dna = q7_mis_dna, zero_correct = 1 - q7_mis_dna - one_correct)
+```
+
+
+## Comparisons By Term
+
+These are all of the summary tables from above, but split by the class the data
+was pulled from (F18, W19).
+
+### Q1: By Term
+
+```{r transfer_Q1_by_term}
+transfer_data %>% 
+  filter(!is.na(Q1_normalized), is.na(Q1_veto)) %>% 
+  # only look at the scoring columns
+  select(term, starts_with("Q1_"), -Q1_response, -Q1_normalized, -Q1_veto) %>%
+  # rename for convenience
+  set_names(str_remove(names(.), "^Q1_")) %>% 
+  # tally / compute proportions
+  group_by(term) %>% 
+  summarize_all(mean, na.rm = TRUE) %>% 
+  select(term, correct, everything()) %>%
+  transpose_tbl() %>% 
+  {.[2:nrow(.), ]} %>% 
+  set_names(c("concept", "F18", "W19"))
+```
+
 ### Q2-4 by term
 
 ```{r mc_analysis_by_term_function}
@@ -282,24 +416,6 @@ summaries_by_term$Q3 %>% count_to_prop(c("F18", "W19"))
 summaries_by_term$Q4 %>% count_to_prop(c("F18", "W19"))
 ```
 
-
-### Q5: Why is the SSE for the new model smaller? 
-
-After answering the previous questions, students moved on to a new page on which they were informed that, in fact, the SSE is lower for the two-predictor model than for either of the single-predictor models (they were prevented from navigating back to modify their answer to the prior question). Given this new information, students were asked on an open-response question why they thought the SSE for the two-predictor model would be smaller. These responses were again coded inductively by the authors, and the proportions of each coded concept are given in the table below.
-
-```{r transfer_Q5}
-transfer_data %>% 
-  filter(!is.na(Q5_response)) %>% 
-  # only look at the scoring columns
-  select(starts_with("Q5_"), -Q5_response, -Q5_notes) %>%
-  # rename for convenience
-  set_names(str_remove(names(.), "^Q5_")) %>% 
-  # tally / compute proportions
-  map_df(mean, na.rm = TRUE) %>% 
-  transpose_tbl() %>%
-  set_names(c("concept", "prop."))
-```
-
 ### Q5 by term
 
 ```{r}
@@ -318,20 +434,6 @@ transfer_data %>%
   set_names(c("concept", "F18", "W19"))
 ```
 
-
-### Q6: Making predictions with new model
-
-To test their understanding of model predictions, in Question 6, students were given the best fitting values of the new model and the corresponding ANOVA table (see output below) and were asked to predict the win percentage for a candy that contains chocolate (see Table 4 for the question and the answer choices). This was a difficult transfer question for a few reasons. First, the way the question is phrased does not explicitly mention sugar percentage, though it is included in the model and the prior four questions have been concerning a model with both chocolate and sugar percentage. Second, in the ANOVA table, sugar percentage is not a significant predictor (evidenced by the p value), which may lead students to discount it. Third, the correct answer was an expression (38.26 + 18.27 + 8.57*sugarpercent) rather than a single value. The model modifies the prediction according to sugar percentage, and since students were not given a specific value for sugar percentage, the correct answer needs to include sugar percentage as a variable. Students had no experience with predictions left as algebraic expressions in the course. And lastly, students were never shown the correct GLM equation for the best fitting two-predictor model. Students were primarily working from their own intuition about what that would be.
-
-```{r, echo = FALSE, out.width = '100%'}
-knitr::include_graphics("figures/output_fit_chocolate_sugar.png")
-knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
-```
-
-```{r}
-summaries$Q6 %>% count_to_prop()
-```
-
 ### Q6 by term
 ```{r}
 summaries_by_term$Q6 %>% count_to_prop(c("F18", "W19"))
@@ -339,69 +441,20 @@ summaries_by_term$Q6 %>% select(F18) %>% chisq.test()
 summaries_by_term$Q6 %>% select(W19) %>% chisq.test()
 ```
 
-### Q7: Why is the ANOVA table for the chocolate then sugar model different from the sugar then chocolate model?
-
-Finally, students were queried about the effect of sequentially adding variables into a complex model. Students were told that we ran two models where the order of the predictor variables was flipped. That is, in the first output below, they were shown the model where chocolate was entered first then sugar percent. In the next output, they were shown the model where sugar percent was entered before chocolate. Question 7 asked students to explain why the ANOVA tables showed different values depending on which variable was entered into the model first. These responses were again coded inductively by the authors, and the proportions of each coded concept are given in the table below the outputs.
-
-```{r, echo = FALSE, out.width = '100%'}
-knitr::include_graphics("figures/output_fit_chocolate_sugar.png")
-knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
-knitr::include_graphics("figures/output_fit_sugar_chocolate.png")
-knitr::include_graphics("figures/output_anova_sugar_chocolate.png")
-
-before <- transfer_data %>% 
-  filter(!is.na(Q7_response)) %>% 
-  # only look at the scoring columns
-  select(starts_with("Q7_"), -Q7_response, -Q7_notes) %>%
-  # rename for convenience
-  set_names(str_remove(names(.), "^Q7_")) %>% 
-  # tally / compute proportions
-  mutate(none_of_these = rowSums(.) == 0)
-
-# tally / compute proportions before removing none_of_these
-prop_before <- before %>% 
-  map_df(mean, na.rm = TRUE) %>% 
-  transpose_tbl() %>%
-  set_names(c("concept", "prop."))
-
-# join and compare with removed people
-before %>% 
-  filter(!none_of_these) %>% 
-  map_df(mean, na.rm = TRUE) %>% 
-  transpose_tbl() %>%
-  set_names(c("concept", "prop.")) %>% 
-  right_join(prop_before, by = "concept",  suffix = c(" after removal", ""))
-```
-
 ### Q7 by term
 
 ```{r}
-before_by_term <- transfer_data %>% 
+transfer_data %>% 
   filter(!is.na(Q7_response)) %>% 
   # only look at the scoring columns
   select(term, starts_with("Q7_"), -Q7_response, -Q7_notes) %>%
   # rename for convenience
   set_names(str_remove(names(.), "^Q7_")) %>% 
   # tally / compute proportions
-  mutate(none_of_these = rowSums(select(., -term)) == 0)
-  
-# tally / compute proportions before removing none_of_these
-prop_before_by_term <- before_by_term %>% 
+  mutate(none_of_these = rowSums(select(., -term)) == 0) %>% 
   group_by(term) %>% 
   summarize_all(mean, na.rm = TRUE) %>% 
   transpose_tbl() %>% 
   {.[2:nrow(.), ]} %>% 
   set_names(c("concept", "F18", "W19"))
-
-# join and compare with removed people
-before_by_term %>% 
-  filter(!none_of_these) %>% 
-  group_by(term) %>% 
-  summarize_all(mean, na.rm = TRUE) %>% 
-  transpose_tbl() %>% 
-  {.[2:nrow(.), ]} %>% 
-  set_names(c("concept", "F18", "W19")) %>% 
-  right_join(prop_before_by_term, by = "concept",  suffix = c(" after removal", "")) %>% 
-  select(concept, F18, W19, everything())
 ```
-

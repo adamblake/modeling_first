@@ -101,6 +101,27 @@ transfer_items <- suppressMessages(bind_rows(
   write_rds("data/PII_transfer_items.Rds")
 
 
+# Other items from Final  ----------------------------------------------
+
+other_items <- suppressMessages(bind_rows(
+  read_csv("data/raw/PSYCH 100A Stigler 18F - Final Exam.csv", skip = 3,
+           col_names = names(read_csv("data/raw/PSYCH 100A Stigler 18F - Final Exam.csv", n_max = 1))
+  ) %>%
+    mutate(term = factor("F18", levels = c("W19", "F18"))) %>%
+    select(term, matches("^Q4$"), Q19, Q21, Q40) %>%
+    set_names(c("term", "uid", paste0("Q", c(19, 21, 40)))),
+
+  read_csv("data/raw/PSYCH 100A Reise 19W - Final Exam.csv", skip = 3,
+           col_names = names(read_csv("data/raw/PSYCH 100A Reise 19W - Final Exam.csv", n_max = 1))
+  ) %>%
+    mutate(term = factor("W19", levels = c("W19", "F18"))) %>%
+    select(term, Q1.4, Q4.3, Q4.5, Q4.23) %>%
+    set_names(c("term", "uid", paste0("Q", c(19, 21, 40))))
+)) %>%
+  mutate_all(as.character) %>%
+  write_rds("data/PII_other_items.Rds")
+
+
 # De-identify and combine -------------------------------------------------
 
 PII_key <- final_grades %>%
@@ -115,6 +136,14 @@ transfer_data <- lst(PII_key, final_grades, partial_demographics, transfer_items
   reduce(left_join, by = c("term", "uid")) %>%
   select(-uid) %>%
   write_rds("data/transfer_data.Rds")
+
+other_data <- lst(PII_key, other_items) %>%
+  map(function(x) {
+    x[x$uid %in% PII_key$uid, ] %>% distinct(uid, .keep_all = TRUE)
+  }) %>%
+  reduce(left_join, by = c("term", "uid")) %>%
+  select(-uid) %>%
+  write_rds("data/other_data.Rds")
 
 
 # Clean up ----------------------------------------------------------------
