@@ -276,51 +276,6 @@ knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
 summaries$Q6 %>% count_to_prop()
 ```
 
-#### Do similar items from the final predict performance on Q6?
-
-The following three questions were asked on the final and directly relate to understanding how to make a prediction using model coefficients.
-
-**1)** kBased on this chocolate model, what would the predicted value of winpercent be for candies that contain chocolate?
-
-```{r, echo = FALSE}
-lm(winpercent ~ chocolate, data = candy_rankings)
-```
-
-**2)** We fit another model (the “**fruity** model”) using the same approach we used with **chocolate**. The parameter estimates for the two models are in the table above. How should we interpret the negative estimate (-11.21) for the **fruity** parameter?
-
-```{r, echo = FALSE}
-lm(winpercent ~ fruity, data = candy_rankings)
-```
-
-**3)** Fitting the model of winpercent explained by sugarpercent yields the following parameter estimates: $b_0 = 44.61$; $b_1 = .1192$. If a candy has a sugarpercent of 90, what would you predict its winpercent
-to be?
-
-```{r}
-left_join(
-  transfer_data %>% 
-    mutate(Q6 = str_detect(Q6, "sugarpercent$") %>% as.integer()) %>% 
-    select(id, Q6),
-  
-  other_data %>% 
-    mutate(
-      Q19 = str_detect(Q19, "42\\.14 \\+ 18\\.78") %>% as.integer(),
-      Q21 = str_detect(Q21, "The negative number shows .+ having fruit .+ candy less likely to win") %>%
-        as.integer(),
-      Q40 = str_detect(Q40, "55") %>% as.integer()
-    ),
-  by = "id"
-) %>% 
-  select(-term, -id) %>% 
-  rename(other_1 = Q19, other_2 = Q21, other_3 = Q40) %>% 
-  cor(use = "complete.obs") %>% 
-  ggcorrplot(
-    title = "Cor. of the transfer item (Q6) and the exam items",
-    type = "lower", 
-    lab = TRUE, 
-    colors = c("white", "grey", "black")
-  )
-```
-
 
 ### Q7: Why is the ANOVA table for the chocolate then sugar model different from the sugar then chocolate model?
 
@@ -368,6 +323,8 @@ q7_data %>%
   mutate(mis_dna = q7_mis_dna, zero_correct = 1 - q7_mis_dna - one_correct)
 ```
 
+
+# Auxillary Analyses
 
 ## Comparisons By Term
 
@@ -457,4 +414,88 @@ transfer_data %>%
   transpose_tbl() %>% 
   {.[2:nrow(.), ]} %>% 
   set_names(c("concept", "F18", "W19"))
+```
+
+
+## Correlations with Performance
+
+```{r transfer_data_scoring}
+transfer_data_scored <- transfer_data %>% 
+  mutate(
+    Q1_score = (Q1_GLM + Q1_proper_subscripts + Q1_y +  Q1_one_intercept +
+                  Q1_two_b + Q1_two_x +  Q1_error) / 7,
+    Q2_score = str_detect(Q2, "^Higher") %>% as.integer(),
+    Q3_score = str_detect(Q3, "^Lower") %>% as.integer(),
+    Q4_score = str_detect(Q4, "^The same") %>% as.integer(),
+    Q5_score = (`Q5_explain more variation/error` + `Q5_ss model larger` + 
+                  `Q5_distance to model / deviation from the model` + 
+                  `Q5_ss total same`) / 4,
+    Q6_score = str_detect(Q6, "sugarpercent$") %>% as.integer(),
+    Q7_score = (`Q7_first variable has more` + `Q7_second variable has leftover (first is taken out)` + 
+                  `Q7_SS Model / PRE has different opportunity / variation to explain` + 
+                  `Q7_overlapping variation`) / 4
+  ) %>% 
+  select(id, ends_with("_score"))
+```
+
+### Correlation with Final Exam Performance
+
+```{r}
+response_matrix <- transfer_data %>% 
+  select(id, final_exam) %>% 
+  left_join(transfer_data_scored, by = "id") %>% 
+  select(-id, GLM = Q1_score, PRE = Q2_score, SSE = Q3_score, SST = Q4_score,
+         Why_SSE = Q5_score, Predict = Q6_score, Type1 = Q7_score) 
+
+response_matrix %>% 
+  cor(use = "complete.obs") %>% 
+  ggcorrplot(
+    title = "Cor. of the final exam and transfer items",
+    type = "lower",
+    lab = TRUE,
+    colors = c("white", "grey", "black"),
+    p.mat = cor_pmat(response_matrix, use = "complete.obs"),
+    sig.level = .0001
+  )
+
+```
+
+
+
+### Do similar items from the final predict performance on Q6?
+
+The following three questions were asked on the final and directly relate to understanding how to make a prediction using model coefficients.
+
+**1)** Based on this chocolate model, what would the predicted value of winpercent be for candies that contain chocolate?
+
+```{r, echo = FALSE}
+lm(winpercent ~ chocolate, data = candy_rankings)
+```
+
+**2)** We fit another model (the “**fruity** model”) using the same approach we used with **chocolate**. The parameter estimates for the two models are in the table above. How should we interpret the negative estimate (-11.21) for the **fruity** parameter?
+
+```{r, echo = FALSE}
+lm(winpercent ~ fruity, data = candy_rankings)
+```
+
+**3)** Fitting the model of winpercent explained by sugarpercent yields the following parameter estimates: $b_0 = 44.61$; $b_1 = .1192$. If a candy has a sugarpercent of 90, what would you predict its winpercent
+to be?
+
+```{r}
+other_data %>% 
+  mutate(
+    Q19 = str_detect(Q19, "42\\.14 \\+ 18\\.78") %>% as.integer(),
+    Q21 = str_detect(Q21, "The negative number shows .+ having fruit .+ candy less likely to win") %>%
+      as.integer(),
+    Q40 = str_detect(Q40, "55") %>% as.integer()
+  ) %>% 
+  right_join(transfer_data_scored %>% select(id, Q6_score), by = "id") %>% 
+  select(Q6 = Q6_score, other_1 = Q19, other_2 = Q21, other_3 = Q40) %>% 
+  cor(method = "spearman", use = "complete.obs") %>% 
+  ggcorrplot(
+    title = "Cor. of the transfer item (Q6) and the exam items",
+    type = "lower", 
+    lab = TRUE, 
+    colors = c("white", "grey", "black")
+  )
 ```
