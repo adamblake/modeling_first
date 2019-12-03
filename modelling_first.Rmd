@@ -32,12 +32,12 @@ length2 <- function(x, na.rm = TRUE) {
 
 # standard error
 se <- function(x, na.rm = TRUE) {
-  sd(x, na.rm) / sqrt(length2(x, na.rm))
+  sd(x, na.rm = na.rm) / sqrt(length2(x, na.rm = na.rm))
 }
 
 # margin of error
 moe <- function(x, p = .975, na.rm = TRUE) {
-  se(x, na.rm) * qt(p, length2(x, na.rm) - 1)
+  se(x, na.rm = na.rm) * qt(p, length2(x, na.rm = na.rm) - 1)
 }
 
 # transpose a tibble
@@ -76,8 +76,9 @@ transfer_data <- transfer_data_raw %>%
   left_join(score_sheets$Q7, by = "Q7_response") %>% 
   mutate(
     Q1_correct = Q1_GLM + Q1_y + Q1_intercept + Q1_two_b + Q1_two_x + Q1_error == 6,
-    Q1_correct = ifelse(is.na(Q1_veto), Q1_correct, FALSE)
-  ) 
+    Q1_correct = ifelse(is.na(Q1_veto), Q1_correct, FALSE),
+    Q6 = str_replace(Q6, "8.57", "0.0857")
+  )
 ```
 
 
@@ -196,37 +197,89 @@ transfer_data %>%
   set_names(c("concept", "proportion"))
 ```
 
+### Q1: By Term
+
+```{r transfer_Q1_by_term}
+transfer_data %>% 
+  filter(!is.na(Q1_normalized), is.na(Q1_veto)) %>% 
+  # only look at the scoring columns
+  select(term, starts_with("Q1_"), -Q1_response, -Q1_normalized, -Q1_veto) %>%
+  # rename for convenience
+  set_names(str_remove(names(.), "^Q1_")) %>% 
+  # tally / compute proportions
+  group_by(term) %>% 
+  summarize_all(mean, na.rm = TRUE) %>% 
+  select(term, correct, everything()) %>%
+  transpose_tbl() %>% 
+  {.[2:nrow(.), ]} %>% 
+  set_names(c("concept", "F18", "W19"))
+```
+
+
 ### Q2-4: Reasoning about PRE, SST, and SSE in the New model
 
 Students were next asked three multiple choice questions asking them to make predictions about PRE, SST, and SSE for the new two-variable model. Questions and a summary of responses are shown below.
 
-```{r mc_analysis_function}
-mc_analysis <- function(data, column) {
+```{r mc_summaries}
+mc_summarize <- function(data, column, other_groups = NULL) {
   data %>%
-    select_at(column) %>% 
+    select_at(vars(column, other_groups)) %>% 
     na.omit() %>%
-    group_by_at(vars(column)) %>%
-    summarize(n = n()) %>%
-    mutate(prop = n / sum(n)) %T>%
-    print() %>%
-    select(n) %>% 
-    chisq.test()
+    group_by_at(vars(column, other_groups)) %>%
+    summarize(n = n()) %>% 
+    ungroup()
 }
+
+count_to_prop <- function(data, column = "n", na.rm = FALSE) {
+  data %>% mutate_at(vars(column), ~ . / sum(., na.rm = na.rm))
+}
+
+summaries <- map(
+  lst(Q2 = "Q2", Q3 = "Q3", Q4 = "Q4", Q6 = "Q6"), 
+  ~mc_summarize(transfer_data, .)
+)
 ```
 
 #### PRE
 ```{r}
-transfer_data %>% mc_analysis("Q2")
+summaries$Q2 %>% count_to_prop()
+summaries$Q2 %>% select(n) %>% chisq.test()
 ```
 
 #### SST
 ```{r}
-transfer_data %>% mc_analysis("Q3")
+summaries$Q3 %>% count_to_prop()
+summaries$Q3 %>% select(n) %>% chisq.test()
 ```
 
 #### SSE
 ```{r}
-transfer_data %>% mc_analysis("Q4")
+summaries$Q4 %>% count_to_prop()
+summaries$Q4 %>% select(n) %>% chisq.test()
+```
+
+### Q2-4 by term
+
+```{r mc_analysis_by_term_function}
+summaries_by_term <- map(
+  lst(Q2 = "Q2", Q3 = "Q3", Q4 = "Q4", Q6 = "Q6"), 
+  function(x) mc_summarize(transfer_data, x, "term") %>% spread(term, n)
+) 
+```
+
+#### PRE
+```{r}
+summaries_by_term$Q2 %>% count_to_prop(c("F18", "W19"))
+```
+
+#### SST
+```{r}
+summaries_by_term$Q3 %>% count_to_prop(c("F18", "W19"))
+```
+
+#### SSE
+```{r}
+summaries_by_term$Q4 %>% count_to_prop(c("F18", "W19"))
 ```
 
 
@@ -247,6 +300,24 @@ transfer_data %>%
   set_names(c("concept", "proportion"))
 ```
 
+### Q5 by term
+
+```{r}
+transfer_data %>% 
+  filter(!is.na(Q5_response)) %>% 
+  # only look at the scoring columns
+  select(term, starts_with("Q5_"), -Q5_response, -Q5_notes) %>%
+  # rename for convenience
+  set_names(str_remove(names(.), "^Q5_")) %>% 
+  # tally / compute proportions
+  group_by(term) %>% 
+  summarize_all(mean, na.rm = TRUE) %>% 
+  # select(term, correct, everything()) %>%
+  transpose_tbl() %>% 
+  {.[2:nrow(.), ]} %>% 
+  set_names(c("concept", "F18", "W19"))
+```
+
 
 ### Q6: Making predictions with new model
 
@@ -258,7 +329,14 @@ knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
 ```
 
 ```{r}
-transfer_data %>% mc_analysis("Q6")
+summaries$Q6 %>% count_to_prop()
+```
+
+### Q6 by term
+```{r}
+summaries_by_term$Q6 %>% count_to_prop(c("F18", "W19"))
+summaries_by_term$Q6 %>% select(F18) %>% chisq.test()
+summaries_by_term$Q6 %>% select(W19) %>% chisq.test()
 ```
 
 ### Q7: Why is the ANOVA table for the chocolate then sugar model different from the sugar then chocolate model?
@@ -271,14 +349,59 @@ knitr::include_graphics("figures/output_anova_chocolate_sugar.png")
 knitr::include_graphics("figures/output_fit_sugar_chocolate.png")
 knitr::include_graphics("figures/output_anova_sugar_chocolate.png")
 
-transfer_data %>% 
+before <- transfer_data %>% 
   filter(!is.na(Q7_response)) %>% 
   # only look at the scoring columns
   select(starts_with("Q7_"), -Q7_response, -Q7_notes) %>%
   # rename for convenience
   set_names(str_remove(names(.), "^Q7_")) %>% 
   # tally / compute proportions
+  mutate(none_of_these = rowSums(.) == 0)
+
+# tally / compute proportions before removing none_of_these
+prop_before <- before %>% 
   map_df(mean, na.rm = TRUE) %>% 
   transpose_tbl() %>%
   set_names(c("concept", "proportion"))
+
+# join and compare with removed people
+before %>% 
+  filter(!none_of_these) %>% 
+  map_df(mean, na.rm = TRUE) %>% 
+  transpose_tbl() %>%
+  set_names(c("concept", "proportion")) %>% 
+  right_join(prop_before, by = "concept",  suffix = c(" after removal", ""))
 ```
+
+### Q7 by term
+
+```{r}
+before_by_term <- transfer_data %>% 
+  filter(!is.na(Q7_response)) %>% 
+  # only look at the scoring columns
+  select(term, starts_with("Q7_"), -Q7_response, -Q7_notes) %>%
+  # rename for convenience
+  set_names(str_remove(names(.), "^Q7_")) %>% 
+  # tally / compute proportions
+  mutate(none_of_these = rowSums(select(., -term)) == 0)
+  
+# tally / compute proportions before removing none_of_these
+prop_before_by_term <- before_by_term %>% 
+  group_by(term) %>% 
+  summarize_all(mean, na.rm = TRUE) %>% 
+  transpose_tbl() %>% 
+  {.[2:nrow(.), ]} %>% 
+  set_names(c("concept", "F18", "W19"))
+
+# join and compare with removed people
+before_by_term %>% 
+  filter(!none_of_these) %>% 
+  group_by(term) %>% 
+  summarize_all(mean, na.rm = TRUE) %>% 
+  transpose_tbl() %>% 
+  {.[2:nrow(.), ]} %>% 
+  set_names(c("concept", "F18", "W19")) %>% 
+  right_join(prop_before_by_term, by = "concept",  suffix = c(" after removal", "")) %>% 
+  select(concept, F18, W19, everything())
+```
+
