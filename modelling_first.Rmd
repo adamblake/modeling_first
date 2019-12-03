@@ -425,8 +425,8 @@ transfer_data_scored <- transfer_data %>%
     Q1_score = (Q1_GLM + Q1_proper_subscripts + Q1_y +  Q1_one_intercept +
                   Q1_two_b + Q1_two_x +  Q1_error) / 7,
     Q2_score = str_detect(Q2, "^Higher") %>% as.integer(),
-    Q3_score = str_detect(Q3, "^Lower") %>% as.integer(),
-    Q4_score = str_detect(Q4, "^The same") %>% as.integer(),
+    Q3_score = str_detect(Q3, "^The same") %>% as.integer(),
+    Q4_score = str_detect(Q4, "^Lower") %>% as.integer(),
     Q5_score = (`Q5_explain more variation/error` + `Q5_ss model larger` + 
                   `Q5_distance to model / deviation from the model` + 
                   `Q5_ss total same`) / 4,
@@ -444,7 +444,7 @@ transfer_data_scored <- transfer_data %>%
 response_matrix <- transfer_data %>% 
   select(id, final_exam) %>% 
   left_join(transfer_data_scored, by = "id") %>% 
-  select(-id, GLM = Q1_score, PRE = Q2_score, SSE = Q3_score, SST = Q4_score,
+  select(-id, GLM = Q1_score, PRE = Q2_score, SST = Q3_score, SSE = Q4_score,
          Why_SSE = Q5_score, Predict = Q6_score, Type1 = Q7_score) 
 
 response_matrix %>% 
