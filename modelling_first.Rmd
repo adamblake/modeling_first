@@ -194,7 +194,7 @@ transfer_data %>%
   map_df(mean, na.rm = TRUE) %>% 
   select(correct, everything()) %>%
   transpose_tbl() %>% 
-  set_names(c("concept", "proportion"))
+  set_names(c("concept", "prop."))
 ```
 
 ### Q1: By Term
@@ -297,7 +297,7 @@ transfer_data %>%
   # tally / compute proportions
   map_df(mean, na.rm = TRUE) %>% 
   transpose_tbl() %>%
-  set_names(c("concept", "proportion"))
+  set_names(c("concept", "prop."))
 ```
 
 ### Q5 by term
@@ -362,14 +362,14 @@ before <- transfer_data %>%
 prop_before <- before %>% 
   map_df(mean, na.rm = TRUE) %>% 
   transpose_tbl() %>%
-  set_names(c("concept", "proportion"))
+  set_names(c("concept", "prop."))
 
 # join and compare with removed people
 before %>% 
   filter(!none_of_these) %>% 
   map_df(mean, na.rm = TRUE) %>% 
   transpose_tbl() %>%
-  set_names(c("concept", "proportion")) %>% 
+  set_names(c("concept", "prop.")) %>% 
   right_join(prop_before, by = "concept",  suffix = c(" after removal", ""))
 ```
 
